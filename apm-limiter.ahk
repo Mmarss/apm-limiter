@@ -38,9 +38,14 @@ ActionsToggle   := 0 ; Nonzero toggle allows the script to run
 IsPaused        := 1 ; Start paused
 IsChatting      := 0
 PauseText       := "ıı"
-IsLocked        := true
+IsLocked        := True
+IsConnecting    := False
+AbortConnect    := False
 window_title    := "APM Limiter"
 control_actions := "control_actions"
+
+NetworkConnectRequest := ComObject("Msxml2.XMLHTTP")
+NetworkConnectRequest.onreadystatechange := OnNetworkConnectReady
 
 A_TrayMenu.Add() ; Add separator line
 A_TrayMenu.Add("Lock Position", OnMenuToggleLockPosition)
@@ -70,8 +75,6 @@ MenuActionLimitOptions.Add("100", OnMenuSetActionLimit)
 A_TrayMenu.Add("Action Bank Cap", MenuActionLimitOptions)
 ContextMenu.Add("Action Bank Cap", MenuActionLimitOptions)
 
-ContextMenu.Add("Exit", Exit)
-
 ActionBankGui := Gui("+AlwaysOnTop +ToolWindow -Caption")
 ActionBankGui.BackColor := "333333"
 ActionBankGui.SetFont("s42 bold cWhite")
@@ -79,6 +82,28 @@ ActionBankGui.Add("Text", "x4 y4 w112 Center vActionBankText", ActionBank)
 ActionBankGui.SetFont("s12 bold cWhite")
 ActionBankGui.Add("Text", "x103 y2 w12 h18 Center vPauseText", PauseText)
 ActionBankGui.Show("x6 y150 w120 h72")
+
+NetworkApmGui := Gui("+AlwaysOnTop +ToolWindow -Caption")
+NetworkApmGui.BackColor := "000000"
+NetworkApmGui.SetFont("s24 bold cWhite")
+NetworkApmGui.Add("Text",, "Network APM")
+NetworkApmGui.SetFont("s16 bold cWhite")
+NetworkApmGui.Add("Text",, "Server address:")
+NetworkApmGui.SetFont("norm cBlack")
+NetworkApmGui.Add("Edit", "W400 vNetworkAddress")
+NetworkApmGui.SetFont("bold cWhite")
+NetworkApmGui.Add("Text",, "Team number:")
+NetworkApmGui.SetFont("norm cBlack")
+NetworkApmGui.Add("Edit", "W400 Number vNetworkTeamId")
+NetworkApmGui.Add("Button", "X106 W150 vCancel", "Cancel").OnEvent("Click", OnNetworkApmCancel)
+NetworkApmGui.Add("Button", "X+24 W150 vConnect", "Connect").OnEvent("Click", OnNetworkApmConnect)
+NetworkApmGui.SetFont("s12 norm cWhite")
+NetworkApmGui.Add("Text", "X106 W324 Right vStatus", "Disconnected")
+
+A_TrayMenu.Add("Network APM...", (*) => NetworkApmGui.Show())
+ContextMenu.Add("Network APM...", (*) => NetworkApmGui.Show())
+
+ContextMenu.Add("Exit", Exit)
 
 OnMessage(0x0201, WM_LBUTTONDOWN)
 OnMessage(0x0204, WM_RBUTTONDOWN)
@@ -101,8 +126,8 @@ Exit(*) {
 OnMenuToggleLockPosition(*) {
   global IsLocked
   IsLocked := !IsLocked
-  A_TrayMenu.ToggleCheck("Lock Position")
-  ContextMenu.ToggleCheck("Lock Position")
+  A_TrayMenu.ToggleCheck("Lock position")
+  ContextMenu.ToggleCheck("Lock position")
 }
 
 OnMenuSetApmLimit(ItemName, *) {
@@ -112,6 +137,66 @@ OnMenuSetApmLimit(ItemName, *) {
 OnMenuSetActionLimit(ItemName, *) {
   global ActionBankCap
   ActionBankCap := ItemName + 0
+}
+
+OnNetworkApmCancel(*) {
+  global IsConnecting, AbortConnect, NetworkApmGui
+  if (IsConnecting) {
+    NetworkConnectRequest.abort()
+    IsConnecting := False
+    NetworkApmGui["Connect"].Enabled := True
+    NetworkApmGui["Cancel"].Text := "Cancel"
+    NetworkApmGui["Status"].Text := "Disconnected"
+  } else {
+    NetworkApmGui.Hide()
+  }
+}
+
+OnNetworkApmConnect(*) {
+  global NetworkApmGui, IsConnecting, NetworkConnectRequest
+  NetworkApmGui["Connect"].Enabled := False
+  NetworkApmGui["Cancel"].Text := "Abort"
+  NetworkApmGui["Status"].Text := "Connecting..."
+  IsConnecting := True
+
+  if (NetworkApmGui["NetworkAddress"].Text == "") {
+    NetworkApmGui["Status"].Text := "Invalid address"
+    return
+  }
+
+  if (NetworkApmGui["NetworkTeamId"].Text == "") {
+    NetworkApmGui["Status"].Text := "Invalid team id"
+    return
+  }
+
+  Endpoint := "http://" NetworkApmGui["NetworkAddress"].Text "/team/" NetworkApmGui["NetworkTeamId"].Text "/test"
+  Try {
+    NetworkConnectRequest.open("GET", Endpoint, True)
+    NetworkConnectRequest.send()
+  } catch as e {
+    NetworkApmGui["Status"].Text := "Error connecting: " e.Message
+  }
+}
+
+OnNetworkConnectReady() {
+  global NetworkConnectRequest, NetworkApmGui, IsConnecting
+  if (NetworkConnectRequest.readyState != 4) { ; 4 = COMPLETED
+    return
+  }
+  IsConnecting := False
+  NetworkApmGui["Connect"].Enabled := True
+  if (NetworkConnectRequest.status == 200 and NetworkConnectRequest.responseText == "ok") {
+    NetworkApmGui["Connect"].Text := "Disconnect"
+    NetworkApmGui["Cancel"].Text := "Close"
+    NetworkApmGui["Status"].Text := "Connected"
+  } else {
+    NetworkApmGui["Cancel"].Text := "Cancel"
+    if (NetworkConnectRequest.status != 200) {
+      NetworkApmGui["Status"].Text := "Server status " NetworkConnectRequest.status
+    } else {
+      NetworkApmGui["Status"].Text := "Unrecognised response content `"" NetworkConnectRequest.responseText "`""
+    }
+  }
 }
 
 UpdateGui() {
