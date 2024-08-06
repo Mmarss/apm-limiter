@@ -1,6 +1,6 @@
 ﻿; APM Limiter
-; Version 1.4
-; 2024-03-02
+; Version 1.5
+; 2024-08-05
 
 
 
@@ -28,287 +28,183 @@
 
 
 
-#NoEnv  ; Recommended for performance and compatibility with future AutoHotkey releases.
-; #Warn  ; Enable warnings to assist with detecting common errors.
-SendMode Input  ; Recommended for new scripts due to its superior speed and reliability.
-SetWorkingDir %A_ScriptDir%  ; Ensures a consistent starting directory.
-#SingleInstance, Force
+; #Warn
+#SingleInstance Force
 
-Actions = 0
-ActionBankCap = 10
-; Nonzero toggle allows the script to run
-ActionsToggle = 0
-IsPaused = 1 ; Start paused
-IsChatting = 0
-PauseText = ıı
-IsLocked = true
-window_title = "APM Limiter"
-control_actions = "control_actions"
+ActionBank      := 0
+ActionBankCap   := 10
+ActionInterval  := 0
+ActionsToggle   := 0 ; Nonzero toggle allows the script to run
+IsPaused        := 1 ; Start paused
+IsChatting      := 0
+PauseText       := "ıı"
+IsLocked        := true
+window_title    := "APM Limiter"
+control_actions := "control_actions"
 
-Menu, Tray, Add ; Add separator line
-Menu, Tray, Add, Lock Position, ToggleLockPosition
-Menu, Tray, Check, Lock Position
-Menu, MenuApmOptions, Add, 10, SetApmLimit10
-Menu, MenuApmOptions, Add, 20, SetApmLimit20
-Menu, MenuApmOptions, Add, 40, SetApmLimit40
-Menu, MenuApmOptions, Add, 60, SetApmLimit60
-Menu, MenuApmOptions, Add, 100, SetApmLimit100
-Menu, Tray, Add, APM Limit, :MenuApmOptions
-Menu, MenuActionLimitOptions, Add, 1, SetActionLimit1
-Menu, MenuActionLimitOptions, Add, 2, SetActionLimit2
-Menu, MenuActionLimitOptions, Add, 5, SetActionLimit5
-Menu, MenuActionLimitOptions, Add, 10, SetActionLimit10
-Menu, MenuActionLimitOptions, Add, 30, SetActionLimit30
-Menu, MenuActionLimitOptions, Add, 60, SetActionLimit60
-Menu, MenuActionLimitOptions, Add, 100, SetActionLimit100
-Menu, Tray, Add, Action Bank Cap, :MenuActionLimitOptions
+A_TrayMenu.Add() ; Add separator line
+A_TrayMenu.Add("Lock Position", OnMenuToggleLockPosition)
+A_TrayMenu.Check("Lock Position")
 
-Menu, ContextMenu, Add, Lock Position, ToggleLockPosition
-Menu, ContextMenu, Check, Lock Position
-Menu, MenuApmOptions, Add, 10, SetApmLimit10
-Menu, MenuApmOptions, Add, 20, SetApmLimit20
-Menu, MenuApmOptions, Add, 40, SetApmLimit40
-Menu, MenuApmOptions, Add, 60, SetApmLimit60
-Menu, MenuApmOptions, Add, 100, SetApmLimit100
-Menu, ContextMenu, Add, APM Limit, :MenuApmOptions
-Menu, MenuActionLimitOptions, Add, 1, SetActionLimit1
-Menu, MenuActionLimitOptions, Add, 2, SetActionLimit2
-Menu, MenuActionLimitOptions, Add, 5, SetActionLimit5
-Menu, MenuActionLimitOptions, Add, 10, SetActionLimit10
-Menu, MenuActionLimitOptions, Add, 30, SetActionLimit30
-Menu, MenuActionLimitOptions, Add, 60, SetActionLimit60
-Menu, MenuActionLimitOptions, Add, 100, SetActionLimit100
-Menu, ContextMenu, Add, Action Bank Cap, :MenuActionLimitOptions
-Menu, ContextMenu, Add, Exit, Exit
+ContextMenu := Menu()
+ContextMenu.Add("Lock Position", OnMenuToggleLockPosition)
+ContextMenu.Check("Lock Position")
 
-Gui, +AlwaysOnTop +ToolWindow -Caption
-Gui, Color, 333333
-;Gui, +LastFound
-;WinSet, TransColor, 000000
-Gui, Font, s42 bold cWhite
-Gui, Add, Text, x4 y4 w112 Center vActions, %Actions%
-Gui, Font, s12 bold cWhite
-Gui, Add, Text, x103 y2 w12 h18 Center vPauseText, %PauseText%
-Gui, Show, x6 y150 w120 h72
+MenuApmOptions := Menu()
+MenuApmOptions.Add("10", OnMenuSetApmLimit)
+MenuApmOptions.Add("20", OnMenuSetApmLimit)
+MenuApmOptions.Add("40", OnMenuSetApmLimit)
+MenuApmOptions.Add("60", OnMenuSetApmLimit)
+MenuApmOptions.Add("100", OnMenuSetApmLimit)
+A_TrayMenu.Add("APM Limit", MenuApmOptions)
+ContextMenu.Add("APM Limit", MenuApmOptions)
 
-OnMessage(0x0201, "WM_LBUTTONDOWN")
-OnMessage(0x0204, "WM_RBUTTONDOWN")
+MenuActionLimitOptions := Menu()
+MenuActionLimitOptions.Add("1", OnMenuSetActionLimit)
+MenuActionLimitOptions.Add("2", OnMenuSetActionLimit)
+MenuActionLimitOptions.Add("5", OnMenuSetActionLimit)
+MenuActionLimitOptions.Add("10", OnMenuSetActionLimit)
+MenuActionLimitOptions.Add("30", OnMenuSetActionLimit)
+MenuActionLimitOptions.Add("60", OnMenuSetActionLimit)
+MenuActionLimitOptions.Add("100", OnMenuSetActionLimit)
+A_TrayMenu.Add("Action Bank Cap", MenuActionLimitOptions)
+ContextMenu.Add("Action Bank Cap", MenuActionLimitOptions)
 
-WM_LBUTTONDOWN(wParam, lParam) {
+ContextMenu.Add("Exit", Exit)
+
+ActionBankGui := Gui("+AlwaysOnTop +ToolWindow -Caption")
+ActionBankGui.BackColor := "333333"
+ActionBankGui.SetFont("s42 bold cWhite")
+ActionBankGui.Add("Text", "x4 y4 w112 Center vActionBankText", ActionBank)
+ActionBankGui.SetFont("s12 bold cWhite")
+ActionBankGui.Add("Text", "x103 y2 w12 h18 Center vPauseText", PauseText)
+ActionBankGui.Show("x6 y150 w120 h72")
+
+OnMessage(0x0201, WM_LBUTTONDOWN)
+OnMessage(0x0204, WM_RBUTTONDOWN)
+
+WM_LBUTTONDOWN(*) {
   global IsLocked
   if (!IsLocked) {
-    PostMessage, 0xA1, 2,,, A
+    PostMessage("0xA1", 2)
   }
 }
 
-WM_RBUTTONDOWN(wParam, lParam) {
-  Menu, ContextMenu, Show
+WM_RBUTTONDOWN(*) {
+  ContextMenu.Show()
 }
 
-ToggleLockPosition() {
+Exit(*) {
+  ExitApp()
+}
+
+OnMenuToggleLockPosition(*) {
   global IsLocked
   IsLocked := !IsLocked
-  Menu, Tray, ToggleCheck, Lock Position
-  Menu, ContextMenu, ToggleCheck, Lock Position
+  A_TrayMenu.ToggleCheck("Lock Position")
+  ContextMenu.ToggleCheck("Lock Position")
+}
+
+OnMenuSetApmLimit(ItemName, *) {
+  UpdateApmLimit(ItemName + 0)
+}
+
+OnMenuSetActionLimit(ItemName, *) {
+  global ActionBankCap
+  ActionBankCap := ItemName + 0
 }
 
 UpdateGui() {
-  global Actions, PauseText, IsPaused, IsChatting, ActionBankCap
-  GuiControl, Text, Actions, %Actions%
-  GuiControl, Text, PauseText, %PauseText%
+  global ActionBankGui, PauseText, IsPaused, IsChatting, ActionBankCap
+
+  ActionBankGui["ActionBankText"].Text := ActionBank
+  ActionBankGui["PauseText"].Text := PauseText
+
   if (IsPaused || IsChatting) {
-    Gui, Color, 333333
-    Gui, Font, s42 bold cWhite
-    GuiControl, Font, Actions
-  } else if (Actions == 0) {
-    Gui, Color, FF0000
-    Gui, Font, s42 bold cBlack
-    GuiControl, Font, Actions
-  } else if (Actions == ActionBankCap) {
-    Gui, Color, 000000
-    Gui, Font, s42 bold cYellow
-    GuiControl, Font, Actions
+    ActionBankGui.BackColor := "333333"
+    ActionBankGui["ActionBankText"].SetFont("s42 bold cWhite")
+  } else if (ActionBank == 0) {
+    ActionBankGui.BackColor := "FF0000"
+    ActionBankGui["ActionBankText"].SetFont("s42 bold cBlack")
+  } else if (ActionBank == ActionBankCap) {
+    ActionBankGui.BackColor := "000000"
+    ActionBankGui["ActionBankText"].SetFont("s42 bold cYellow")
   } else {
-    Gui, Color, 000000
-    Gui, Font, s42 bold cWhite
-    GuiControl, Font, Actions
+    ActionBankGui.BackColor := "000000"
+    ActionBankGui["ActionBankText"].SetFont("s42 bold cWhite")
   }
 }
 
+Timer_NewAction() {
+  UpdateAction(+1)
+  UpdateGui()
+}
+
 UpdateTimers() {
-  global IsPaused
+  global IsPaused, ActionInterval
   if (!IsPaused) {
-    SetTimer, Timer_NewAction, On
+    SetTimer(Timer_NewAction, ActionInterval)
   } else {
-    SetTimer, Timer_NewAction, Off
+    SetTimer(Timer_NewAction, 0)
   }
 }
 
 UpdatePauseText() {
   global PauseText, IsChatting, IsPaused
   if (IsChatting) {
-    PauseText = ↩ ; Arrow down left
+    PauseText := "↩" ; Arrow down left
   } else {
     if (IsPaused) {
-      PauseText = ıı
+      PauseText := "ıı"
     } else {
-      PauseText = ▶ ; Play symbol
+      PauseText := "▶" ; Play symbol
     }
   }
 }
 
 UpdateAction(Delta:=-1) {
-  global Actions, ActionBankCap
-  Actions += Delta
-  if (Actions > ActionBankCap) {
-    Actions := ActionBankCap
+  global ActionBank, ActionBankCap
+  ActionBank += Delta
+  if (ActionBank > ActionBankCap) {
+    ActionBank := ActionBankCap
   }
 }
 
-UpdateApmLimit(Limit:=60) {
-  Duration := 1000*60/Limit
-  SetTimer, Timer_NewAction, %Duration%
+UpdateApmLimit(ApmLimit:=60) {
+  global ActionInterval
+  ActionInterval := 1000*60/ApmLimit
+  UpdateTimers()
 }
 
 UpdateApmLimit()
 
-if (IsPaused) {
-  SetTimer, Timer_NewAction, Off
-}
-
-~F3 Up::
-~F12 Up::
-~Pause Up::
+~F3::
+~F12::
+~Pause::
+{
+  global IsPaused, ActionsToggle
   IsPaused := !IsPaused
   ActionsToggle := !(IsPaused || IsChatting)
   UpdateTimers()
   UpdatePauseText()
   UpdateGui()
-  Return
+}
 
-~Enter Up::
-~NumpadEnter Up::
+~Enter::
+~NumpadEnter::
+{
+  global IsChatting, ActionsToggle
   IsChatting := !IsChatting
   ActionsToggle := !(IsPaused || IsChatting)
   UpdateTimers()
   UpdatePauseText()
   UpdateGui()
-  Return
+}
 
-#If Actions and ActionsToggle
-; Allow input but count actions
-~*LButton::
-~*RButton::
-~*MButton::
-~*XButton1::
-~*XButton2::
-~*WheelDown::
-~*WheelUp::
-~*WheelLeft::
-~*WheelRight::
-~*A::
-~*B::
-~*C::
-~*D::
-~*E::
-~*F::
-~*G::
-~*H::
-~*I::
-~*J::
-~*K::
-~*L::
-~*M::
-~*N::
-~*O::
-~*P::
-~*Q::
-~*R::
-~*S::
-~*T::
-~*U::
-~*V::
-~*W::
-~*X::
-~*Y::
-~*Z::
-~*`::
-~*SC002:: ; 1
-~*SC003:: ; 2
-~*SC004:: ; 3
-~*SC005:: ; 4
-~*SC006:: ; 5
-~*SC007:: ; 6
-~*SC008:: ; 7
-~*SC009:: ; 8
-~*SC00A:: ; 9
-~*SC00B:: ; 0
-~*-::
-~*=::
-~*\::
-~*Space::
-~*Tab::
-~*CapsLock::
-~*Escape::
-~*Backspace::
-;~*Enter:: ; Enter key has special effect
-~*F1::
-~*F2::
-;~*F3:: ; Pause key has special effect
-~*F4::
-~*F5::
-~*F6::
-~*F7::
-~*F8::
-~*F9::
-~*F10::
-~*F11::
-;~*F12:: ; F12 is an extra pause key
-~*Delete::
-~*Insert::
-~*Home::
-~*End::
-~*PgUp::
-~*PgDn::
-~*Up::
-~*Down::
-~*Left::
-~*Right::
-~*Numpad0::
-~*NumpadIns::
-~*Numpad1::
-~*NumpadEnd::
-~*Numpad2::
-~*NumpadDown::
-~*Numpad3::
-~*NumpadPgDn::
-~*Numpad4::
-~*NumpadLeft::
-~*Numpad5::
-~*NumpadClear::
-~*Numpad6::
-~*NumpadRight::
-~*Numpad7::
-~*NumpadHome::
-~*Numpad8::
-~*NumpadUp::
-~*Numpad9::
-~*NumpadPgUp::
-~*NumpadDot::
-~*NumpadDel::
-~*NumpadDiv::
-~*NumpadMult::
-~*NumpadAdd::
-~*NumpadSub::
-;~*NumpadEnter:: ; Enter key has special effect
-  UpdateAction()
-  UpdateGui()
-  Return
-
-#If not Actions and ActionsToggle
+#HotIf ActionsToggle and ActionBank <= 0
 ; Block key presses
-*LButton::
-*RButton::
+;*LButton::
+;*RButton::
 *MButton::
 *XButton1::
 *XButton2::
@@ -411,63 +307,117 @@ if (IsPaused) {
 *NumpadAdd::
 *NumpadSub::
 ;*NumpadEnter:: ; Enter key has special effect
-  Return
+{
+  return
+}
 
-Exit
-
-Exit:
-  ExitApp
-  Return
-
-Timer_NewAction:
-  UpdateAction(+1)
+#HotIf ActionsToggle and ActionBank > 0
+; Allow input but count actions
+;~*LButton::
+;~*RButton::
+~*MButton::
+~*XButton1::
+~*XButton2::
+~*WheelDown::
+~*WheelUp::
+~*WheelLeft::
+~*WheelRight::
+~*A::
+~*B::
+~*C::
+~*D::
+~*E::
+~*F::
+~*G::
+~*H::
+~*I::
+~*J::
+~*K::
+~*L::
+~*M::
+~*N::
+~*O::
+~*P::
+~*Q::
+~*R::
+~*S::
+~*T::
+~*U::
+~*V::
+~*W::
+~*X::
+~*Y::
+~*Z::
+~*`::
+~*SC002:: ; 1
+~*SC003:: ; 2
+~*SC004:: ; 3
+~*SC005:: ; 4
+~*SC006:: ; 5
+~*SC007:: ; 6
+~*SC008:: ; 7
+~*SC009:: ; 8
+~*SC00A:: ; 9
+~*SC00B:: ; 0
+~*-::
+~*=::
+~*\::
+~*Space::
+~*Tab::
+~*CapsLock::
+~*Escape::
+~*Backspace::
+;~*Enter:: ; Enter key has special effect
+~*F1::
+~*F2::
+;~*F3:: ; Pause key has special effect
+~*F4::
+~*F5::
+~*F6::
+~*F7::
+~*F8::
+~*F9::
+~*F10::
+~*F11::
+;~*F12:: ; F12 is an extra pause key
+~*Delete::
+~*Insert::
+~*Home::
+~*End::
+~*PgUp::
+~*PgDn::
+~*Up::
+~*Down::
+~*Left::
+~*Right::
+~*Numpad0::
+~*NumpadIns::
+~*Numpad1::
+~*NumpadEnd::
+~*Numpad2::
+~*NumpadDown::
+~*Numpad3::
+~*NumpadPgDn::
+~*Numpad4::
+~*NumpadLeft::
+~*Numpad5::
+~*NumpadClear::
+~*Numpad6::
+~*NumpadRight::
+~*Numpad7::
+~*NumpadHome::
+~*Numpad8::
+~*NumpadUp::
+~*Numpad9::
+~*NumpadPgUp::
+~*NumpadDot::
+~*NumpadDel::
+~*NumpadDiv::
+~*NumpadMult::
+~*NumpadAdd::
+~*NumpadSub::
+;~*NumpadEnter:: ; Enter key has special effect
+{
+  UpdateAction()
   UpdateGui()
-  Return
-
-SetApmLimit10:
-  UpdateApmLimit(10)
-  Return
-
-SetApmLimit20:
-  UpdateApmLimit(20)
-  Return
-
-SetApmLimit40:
-  UpdateApmLimit(40)
-  Return
-
-SetApmLimit60:
-  UpdateApmLimit(60)
-  Return
-
-SetApmLimit100:
-  UpdateApmLimit(100)
-  Return
-
-SetActionLimit1:
-  ActionBankCap := 1
-  Return
-
-SetActionLimit2:
-  ActionBankCap := 2
-  Return
-
-SetActionLimit5:
-  ActionBankCap := 5
-  Return
-
-SetActionLimit10:
-  ActionBankCap := 10
-  Return
-
-SetActionLimit30:
-  ActionBankCap := 30
-  Return
-
-SetActionLimit60:
-  ActionBankCap := 60
-  Return
-
-SetActionLimit100:
-  ActionBankCap := 100
-  Return
+}
